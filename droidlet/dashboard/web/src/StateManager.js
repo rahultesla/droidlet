@@ -109,13 +109,13 @@ class StateManager {
     // Assumes that all socket events for a frame and received before the next frame
     this.labelPropProps = {
       rgbImg: null, 
-      depthImg: null, 
+      depthOrg: null, 
       masks: null,
       pose: null,
     }
     this.prevLabelPropProps = {
       rgbImg: null, 
-      depthImg: null, 
+      depthOrg: null, 
       masks: null,
       pose: null,
     }
@@ -372,17 +372,26 @@ class StateManager {
 
   getLabelPropagationProps() {
     let props = {
-      rgbMap: this.labelPropProps.rgbImg, 
-      depthMap: this.labelPropProps.depthImg, 
+      rgbImg: this.labelPropProps.rgbImg, 
+      depthOrg: this.labelPropProps.depthOrg, 
       masks: this.labelPropProps.masks, 
       basePose: this.labelPropProps.pose,
     }
-    console.log("prop props:", props)
+    console.log("doing the label prop", props)
     this.socket.emit("labelPropagation", props)
   }
 
   labelPropagationReturn(props) {
     console.log("label prop retrun:", props)
+  }
+
+  labelPropPropsFull() {
+    return (
+      this.labelPropProps.rgbImg && 
+      this.labelPropProps.depthOrg && 
+      this.labelPropProps.masks && 
+      this.labelPropProps.pose
+    )
   }
 
   // // Takes in img element and returns RGB map of form height-width-RGBA
@@ -436,12 +445,26 @@ class StateManager {
     });
     if (!this.labelPropProps.rgbImg) {
       this.labelPropProps.rgbImg = res
+      // // Code to add RGB values to props instead of encoded string
+      // let canvas = document.createElement("canvas")
+      // canvas.width = rgb.width === 0 ? 512 : rgb.width
+      // canvas.height = rgb.height === 0 ? 512 : rgb.height
+      // let ctx = canvas.getContext("2d")
+      // rgb.onload = () => {
+      //   ctx.drawImage(rgb, 0, 0)
+      //   let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+      //   this.labelPropProps.rgbImg = imgData
+      //   if (this.labelPropPropsFull()) {
+      //     this.getLabelPropagationProps()
+      //   }
+      // }
+
     }
   }
 
   processDepth(res) {
     let depth = new Image();
-    depth.src = "data:image/webp;base64," + res;
+    depth.src = "data:image/webp;base64," + res.depthImg;
     this.refs.forEach((ref) => {
       if (ref instanceof LiveImage) {
         if (ref.props.type === "depth") {
@@ -452,8 +475,8 @@ class StateManager {
         }
       }
     });
-    if (!this.labelPropProps.depthImg) {
-      this.labelPropProps.depthImg = res
+    if (!this.labelPropProps.depthOrg) {
+      this.labelPropProps.depthOrg = res.depthOrg
     }
   }
 
@@ -486,9 +509,9 @@ class StateManager {
     if (!this.labelPropProps.masks) {
       this.labelPropProps.masks = res.objects.map(o => o.mask)
 
-      // This is here because objects are the last socket event to be sent (excluding humans)
-      if (this.prevLabelPropProps) {
-        this.getLabelPropagationProps()
+      // This is here because objects are (usually) the last socket event to be sent (excluding humans)
+      if (this.labelPropPropsFull() && this.prevLabelPropProps) {
+          this.getLabelPropagationProps()
       }
     }
   }
@@ -530,7 +553,7 @@ class StateManager {
       this.prevLabelPropProps = this.labelPropProps
       this.labelPropProps = {
         rgbImg: null, 
-        depthImg: null, 
+        depthOrg: null, 
         masks: null, 
         pose: {
           x: res.x, 
