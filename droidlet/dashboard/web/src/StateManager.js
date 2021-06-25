@@ -83,6 +83,8 @@ class StateManager {
     this.returnTimelineHandshake = this.returnTimelineHandshake.bind(this);
     this.returnTimelineEvent = this.returnTimelineEvent.bind(this);
 
+    this.getLabelPropagationProps = this.getLabelPropagationProps.bind(this);
+
     // set turk related params
     const urlParams = new URLSearchParams(window.location.search);
     const turkExperimentId = urlParams.get("turk_experiment_id");
@@ -103,6 +105,20 @@ class StateManager {
     this.setUrl(url);
 
     this.fps_time = performance.now();
+
+    // Assumes that all socket events for a frame and received before the next frame
+    this.labelPropProps = {
+      rgbImg: null, 
+      depthImg: null, 
+      masks: null,
+      pose: null,
+    }
+    this.prevLabelPropProps = {
+      rgbImg: null, 
+      depthImg: null, 
+      masks: null,
+      pose: null,
+    }
   }
 
   setDefaultUrl() {
@@ -193,6 +209,8 @@ class StateManager {
     socket.on("map", this.processMap);
     socket.on("returnTimelineHandshake", this.returnTimelineHandshake);
     socket.on("newTimelineEvent", this.returnTimelineEvent);
+
+    socket.on("labelPropagationReturn", this.labelPropagationReturn)
   }
 
   updateStateManagerMemory(data) {
@@ -352,6 +370,49 @@ class StateManager {
     }
   }
 
+  getLabelPropagationProps() {
+    let props = {
+      rgbMap: this.labelPropProps.rgbImg, 
+      depthMap: this.labelPropProps.depthImg, 
+      masks: this.labelPropProps.masks, 
+      basePose: this.labelPropProps.pose,
+    }
+    console.log("prop props:", props)
+    this.socket.emit("labelPropagation", props)
+  }
+
+  labelPropagationReturn(props) {
+    console.log("label prop retrun:", props)
+  }
+
+  // // Takes in img element and returns RGB map of form height-width-RGBA
+  // buildRGBMap(img) {
+  //   // Get image data
+  //   let canvas = document.createElement("canvas")
+  //   canvas.width = img.width === 0 ? 512 : img.width
+  //   canvas.height = img.height === 0 ? 512 : img.height
+  //   let ctx = canvas.getContext("2d")
+  //   ctx.drawImage(img, 0, 0)
+  //   let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
+
+  //   // Convert image data to hwc map
+  //   let imgRGB = [[]]
+  //   let row = 0, col = 0
+  //   for (let i = 0; i < imgData.length; i += 4) {
+  //     let pointData = imgData.slice(i, i + 3) // only include RGB (not RGBA)
+  //     imgRGB[row].push(pointData) 
+  //     col += 1
+  //     if (col === img.width) {
+  //       col = 0
+  //       row += 1
+  //       if (row < img.height) {
+  //         imgRGB.push([])
+  //       }
+  //     }
+  //   }
+  //   return imgRGB
+  // }
+
   processMemoryState(msg) {
     this.refs.forEach((ref) => {
       if (ref instanceof MemoryList) {
@@ -373,6 +434,9 @@ class StateManager {
         }
       }
     });
+    if (!this.labelPropProps.rgbImg) {
+      this.labelPropProps.rgbImg = res
+    }
   }
 
   processDepth(res) {
@@ -388,6 +452,9 @@ class StateManager {
         }
       }
     });
+    if (!this.labelPropProps.depthImg) {
+      this.labelPropProps.depthImg = res
+    }
   }
 
   processRGBDepth(res) {
@@ -416,6 +483,14 @@ class StateManager {
         });
       }
     });
+    if (!this.labelPropProps.masks) {
+      this.labelPropProps.masks = res.objects.map(o => o.mask)
+
+      // This is here because objects are the last socket event to be sent (excluding humans)
+      if (this.prevLabelPropProps) {
+        this.getLabelPropagationProps()
+      }
+    }
   }
 
   processHumans(res) {
@@ -447,6 +522,23 @@ class StateManager {
         });
       }
     });
+
+    if (!this.labelPropProps.pose || (res && 
+      (res.x !== this.labelPropProps.pose.x || 
+      res.y !== this.labelPropProps.pose.y || 
+      res.yaw !== this.labelPropProps.pose.yaw))) {
+      this.prevLabelPropProps = this.labelPropProps
+      this.labelPropProps = {
+        rgbImg: null, 
+        depthImg: null, 
+        masks: null, 
+        pose: {
+          x: res.x, 
+          y: res.y, 
+          yaw: res.yaw, 
+        },
+      }
+    }
   }
 
   connect(o) {
