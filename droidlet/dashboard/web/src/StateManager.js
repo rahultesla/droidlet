@@ -373,6 +373,7 @@ class StateManager {
   getLabelPropagationProps() {
     let props = {
       rgbImg: this.labelPropProps.rgbImg, 
+      prevRgbImg: this.prevPropProps.rgbImg, 
       depthOrg: this.labelPropProps.depthOrg, 
       masks: this.labelPropProps.masks, 
       basePose: this.labelPropProps.pose,
@@ -393,34 +394,6 @@ class StateManager {
       this.labelPropProps.pose
     )
   }
-
-  // // Takes in img element and returns RGB map of form height-width-RGBA
-  // buildRGBMap(img) {
-  //   // Get image data
-  //   let canvas = document.createElement("canvas")
-  //   canvas.width = img.width === 0 ? 512 : img.width
-  //   canvas.height = img.height === 0 ? 512 : img.height
-  //   let ctx = canvas.getContext("2d")
-  //   ctx.drawImage(img, 0, 0)
-  //   let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-
-  //   // Convert image data to hwc map
-  //   let imgRGB = [[]]
-  //   let row = 0, col = 0
-  //   for (let i = 0; i < imgData.length; i += 4) {
-  //     let pointData = imgData.slice(i, i + 3) // only include RGB (not RGBA)
-  //     imgRGB[row].push(pointData) 
-  //     col += 1
-  //     if (col === img.width) {
-  //       col = 0
-  //       row += 1
-  //       if (row < img.height) {
-  //         imgRGB.push([])
-  //       }
-  //     }
-  //   }
-  //   return imgRGB
-  // }
 
   processMemoryState(msg) {
     this.refs.forEach((ref) => {
@@ -445,20 +418,6 @@ class StateManager {
     });
     if (!this.labelPropProps.rgbImg) {
       this.labelPropProps.rgbImg = res
-      // // Code to add RGB values to props instead of encoded string
-      // let canvas = document.createElement("canvas")
-      // canvas.width = rgb.width === 0 ? 512 : rgb.width
-      // canvas.height = rgb.height === 0 ? 512 : rgb.height
-      // let ctx = canvas.getContext("2d")
-      // rgb.onload = () => {
-      //   ctx.drawImage(rgb, 0, 0)
-      //   let imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data
-      //   this.labelPropProps.rgbImg = imgData
-      //   if (this.labelPropPropsFull()) {
-      //     this.getLabelPropagationProps()
-      //   }
-      // }
-
     }
   }
 
