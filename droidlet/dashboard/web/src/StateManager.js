@@ -83,7 +83,7 @@ class StateManager {
     this.returnTimelineHandshake = this.returnTimelineHandshake.bind(this);
     this.returnTimelineEvent = this.returnTimelineEvent.bind(this);
 
-    this.getLabelPropagationProps = this.getLabelPropagationProps.bind(this);
+    this.startLabelPropagation = this.startLabelPropagation.bind(this);
 
     // set turk related params
     const urlParams = new URLSearchParams(window.location.search);
@@ -370,13 +370,16 @@ class StateManager {
     }
   }
 
-  getLabelPropagationProps() {
+  startLabelPropagation() {
     let props = {
       rgbImg: this.labelPropProps.rgbImg, 
-      prevRgbImg: this.prevPropProps.rgbImg, 
+      prevRgbImg: this.prevLabelPropProps.rgbImg, 
       depthOrg: this.labelPropProps.depthOrg, 
+      prevDepthOrg: this.prevLabelPropProps.depthOrg, 
       masks: this.labelPropProps.masks, 
+      prevMasks: this.prevLabelPropProps.masks, 
       basePose: this.labelPropProps.pose,
+      prevBasePose: this.prevLabelPropProps.pose,
     }
     console.log("doing the label prop", props)
     this.socket.emit("labelPropagation", props)
@@ -470,7 +473,7 @@ class StateManager {
 
       // This is here because objects are (usually) the last socket event to be sent (excluding humans)
       if (this.labelPropPropsFull() && this.prevLabelPropProps) {
-          this.getLabelPropagationProps()
+          this.startLabelPropagation()
       }
     }
   }
