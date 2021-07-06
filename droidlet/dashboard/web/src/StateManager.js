@@ -96,7 +96,7 @@ class StateManager {
     this.setTurkWorkerId(turkWorkerId);
 
     // set default url to actual ip:port
-    this.default_url = window.location.host;
+    // this.default_url = window.location.host;
     this.setUrl(this.default_url);
 
     let url = localStorage.getItem("server_url");
@@ -107,18 +107,24 @@ class StateManager {
 
     this.fps_time = performance.now();
 
-    // Assumes that all socket events for a frame and received before the next frame
-    this.labelPropProps = {
+    // Assumes that all socket events for a frame are received before the next frame
+    this.curFeedState = {
       rgbImg: null, 
-      depthOrg: null, 
+      depth: null, 
       masks: null,
       pose: null,
     }
-    this.prevLabelPropProps = {
+    this.prevFeedState = {
       rgbImg: null, 
-      depthOrg: null, 
+      depth: null, 
       masks: null,
       pose: null,
+    }
+    this.stateProcessed = {
+      rgbImg: false, 
+      depth: false, 
+      masks: false,
+      pose: false,
     }
   }
 
@@ -352,6 +358,7 @@ class StateManager {
       }
     }
     if (commands.length > 0) {
+      console.log('emitting command', commands)
       this.socket.emit("movement command", commands);
 
       // Reset keys to prevent duplicate commands
@@ -373,41 +380,51 @@ class StateManager {
 
   startLabelPropagation() {
     let props = {
-      rgbImg: this.labelPropProps.rgbImg, 
-      prevRgbImg: this.prevLabelPropProps.rgbImg, 
-      depthOrg: this.labelPropProps.depthOrg, 
-      prevDepthOrg: this.prevLabelPropProps.depthOrg, 
-      masks: this.labelPropProps.masks, 
-      prevMasks: this.prevLabelPropProps.masks, 
-      basePose: this.labelPropProps.pose,
-      prevBasePose: this.prevLabelPropProps.pose,
+      rgbImg: this.curFeedState.rgbImg, 
+      prevRgbImg: this.prevFeedState.rgbImg, 
+      depth: this.curFeedState.depth, 
+      prevdepth: this.prevFeedState.depth, 
+      masks: this.curFeedState.masks, 
+      prevMasks: this.prevFeedState.masks, 
+      basePose: this.curFeedState.pose,
+      prevBasePose: this.prevFeedState.pose,
     }
     console.log("doing the label prop", props)
+    this.labelPropagationReturn(props.rgbImg)
     this.socket.emit("labelPropagation", props)
   }
 
   labelPropagationReturn(res) {
-    console.log("label prop retrun:", res)
     let rgb = new Image();
-    rgb.src = "data:image/webp;base64," + res[0];
+    rgb.src = "data:image/webp;base64," + res;
     this.refs.forEach((ref) => {
       if (ref instanceof LabelProp) {
-        if (ref.props.type === "rgb") {
-          ref.setState({
-            isLoaded: true,
-            rgb: rgb,
-          });
-        }
+        ref.setState({
+          isLoaded: true,
+          rgb: rgb,
+        });
       }
     });
+    this.stateProcessed.rgbImg = true;
+    this.stateProcessed.depth = true;
+    this.stateProcessed.masks = true;
+    this.stateProcessed.pose = true;
   }
 
-  labelPropPropsFull() {
+  checkRunLabelProp() {
     return (
-      this.labelPropProps.rgbImg && 
-      this.labelPropProps.depthOrg && 
-      this.labelPropProps.masks && 
-      this.labelPropProps.pose
+      this.curFeedState.rgbImg && 
+      this.curFeedState.depth && 
+      this.curFeedState.masks && 
+      this.curFeedState.pose && 
+      this.prevFeedState.rgbImg && 
+      this.prevFeedState.depth && 
+      this.prevFeedState.masks && 
+      this.prevFeedState.pose && 
+      !this.stateProcessed.rgbImg && 
+      !this.stateProcessed.depth && 
+      !this.stateProcessed.masks && 
+      !this.stateProcessed.pose  
     )
   }
 
@@ -432,8 +449,14 @@ class StateManager {
         }
       }
     });
-    if (!this.labelPropProps.rgbImg) {
-      this.labelPropProps.rgbImg = res
+    this.labelPropagationReturn(res)
+    if (this.curFeedState.rgbImg !== res) {
+      this.prevFeedState.rgbImg = this.curFeedState.rgbImg
+      this.curFeedState.rgbImg = res
+      this.stateProcessed.rgbImg = false
+    }
+    if (this.checkRunLabelProp()) {
+      this.startLabelPropagation()
     }
   }
 
@@ -450,8 +473,13 @@ class StateManager {
         }
       }
     });
-    if (!this.labelPropProps.depthOrg) {
-      this.labelPropProps.depthOrg = res.depthOrg
+    if (this.curFeedState.depth !== res) {
+      this.prevFeedState.depth = this.curFeedState.depth
+      this.curFeedState.depth = res
+      this.stateProcessed.depth = false
+    }
+    if (this.checkRunLabelProp()) {
+      this.startLabelPropagation()
     }
   }
 
@@ -481,13 +509,14 @@ class StateManager {
         });
       }
     });
-    if (!this.labelPropProps.masks) {
-      this.labelPropProps.masks = res.objects.map(o => o.mask)
-
-      // This is here because objects are (usually) the last socket event to be sent (excluding humans)
-      if (this.labelPropPropsFull() && this.prevLabelPropProps) {
-          this.startLabelPropagation()
-      }
+    let masks = res.objects.map(o => o.mask)
+    if (JSON.stringify(this.curFeedState.masks) !== JSON.stringify(masks)) {
+      this.prevFeedState.masks = this.curFeedState.masks
+      this.curFeedState.masks = masks
+      this.stateProcessed.masks = false
+    }
+    if (this.checkRunLabelProp()) {
+      this.startLabelPropagation()
     }
   }
 
@@ -521,21 +550,20 @@ class StateManager {
       }
     });
 
-    if (!this.labelPropProps.pose || (res && 
-      (res.x !== this.labelPropProps.pose.x || 
-      res.y !== this.labelPropProps.pose.y || 
-      res.yaw !== this.labelPropProps.pose.yaw))) {
-      this.prevLabelPropProps = this.labelPropProps
-      this.labelPropProps = {
-        rgbImg: null, 
-        depthOrg: null, 
-        masks: null, 
-        pose: {
-          x: res.x, 
-          y: res.y, 
-          yaw: res.yaw, 
-        },
+    if (!this.curFeedState.pose || (res &&  
+      (res.x !== this.curFeedState.pose.x || 
+      res.y !== this.curFeedState.pose.y || 
+      res.yaw !== this.curFeedState.pose.yaw))) {
+      this.prevFeedState.pose = this.curFeedState.pose
+      this.curFeedState.pose = {
+        x: res.x, 
+        y: res.y, 
+        yaw: res.yaw, 
       }
+      this.stateProcessed.pose = false
+    }
+    if (this.checkRunLabelProp()) {
+      this.startLabelPropagation()
     }
   }
 
