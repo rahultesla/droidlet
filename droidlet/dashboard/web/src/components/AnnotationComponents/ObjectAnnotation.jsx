@@ -292,6 +292,7 @@ class ObjectAnnotation extends React.Component {
       nameMap: this.nameMap,
       propertyMap: this.propertyMap,
       pointMap: this.pointMap,
+      originTypeMap: this.originTypeMap, 
     };
     this.props.stateManager.socket.emit("saveObjectAnnotation", postData);
     this.props.stateManager.onObjectAnnotationSave(postData);

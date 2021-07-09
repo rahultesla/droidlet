@@ -83,6 +83,7 @@ class StateManager {
     this.returnTimelineHandshake = this.returnTimelineHandshake.bind(this);
     this.returnTimelineEvent = this.returnTimelineEvent.bind(this);
 
+    this.onObjectAnnotationSave = this.onObjectAnnotationSave.bind(this);
     this.startLabelPropagation = this.startLabelPropagation.bind(this);
     this.labelPropagationReturn = this.labelPropagationReturn.bind(this);
 
@@ -111,7 +112,8 @@ class StateManager {
     this.curFeedState = {
       rgbImg: null, 
       depth: null, 
-      objects: null,
+      objects: null, // Can be changed by annotation tool
+      orgObjects: null, // Original objects sent from backend
       pose: null,
     }
     this.prevFeedState = {
@@ -217,7 +219,7 @@ class StateManager {
     socket.on("returnTimelineHandshake", this.returnTimelineHandshake);
     socket.on("newTimelineEvent", this.returnTimelineEvent);
 
-    socket.on("labelPropagationReturn", this.labelPropagationReturn)
+    socket.on("labelPropagationReturn", this.labelPropagationReturn);
   }
 
   updateStateManagerMemory(data) {
@@ -378,6 +380,37 @@ class StateManager {
     }
   }
 
+  onObjectAnnotationSave(res) {
+    let { nameMap, pointMap, propertyMap, originTypeMap } = res;
+    this.curFeedState.objects = []
+    let scale = 500  // hardcoded from somewhere else
+    for (let id in nameMap) {
+      let oldObj = id < this.curFeedState.orgObjects.length;
+      let newId = oldObj ? this.curFeedState.orgObjects[id].id : null;
+      let newBbox = oldObj ? this.curFeedState.orgObjects[id].bbox : null;
+      let newXyz = oldObj ? this.curFeedState.orgObjects[id].xyz : null;
+      let newMask = pointMap[id].map(mask => mask.map(pt => [pt.x * scale, pt.y * scale]))
+
+      this.curFeedState.objects.push({
+        label: nameMap[id], 
+        mask: newMask, 
+        properties: propertyMap[id].join("\n "),
+        type: originTypeMap[id] || "detector", 
+        id: newId, 
+        bbox: newBbox, 
+        xyz: newXyz, 
+      })
+    }
+
+    this.refs.forEach((ref) => {
+      if (ref instanceof LiveObjects) {
+        ref.setState({
+          objects: this.curFeedState.objects,
+        });
+      }
+    })
+  }
+
   startLabelPropagation() {
     let props = {
       rgbImg: this.curFeedState.rgbImg, 
@@ -505,7 +538,8 @@ class StateManager {
       if (ref instanceof LiveObjects) {
         // Don't add duplicate objects
         for (let i = 0; i < res.objects.length; i++) {
-          if (!ref.state.objects || JSON.stringify(ref.state.objects).indexOf(JSON.stringify(res.objects[i])) === -1) {
+          if (!ref.state.objects || JSON.stringify(this.curFeedState.orgObjects).indexOf(JSON.stringify(res.objects[i])) === -1) {
+          // if (!ref.state.objects || JSON.stringify(ref.state.objects).indexOf(JSON.stringify(res.objects[i])) === -1) {
             ref.addObjects(res.objects[i])
           }
         }
@@ -519,9 +553,10 @@ class StateManager {
         });
       }
     });
-    if (JSON.stringify(this.curFeedState.objects) !== JSON.stringify(res.objects)) {
+    if (JSON.stringify(this.curFeedState.orgObjects) !== JSON.stringify(res.objects)) {
       this.prevFeedState.objects = this.curFeedState.objects
       this.curFeedState.objects = res.objects
+      this.curFeedState.orgObjects = res.objects
       this.stateProcessed.objects = false
     }
     if (this.checkRunLabelProp()) {
