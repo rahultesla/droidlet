@@ -138,6 +138,7 @@ class StateManager {
     this.frameCount = 0
     this.categories = new Set()
     this.properties = new Set()
+    this.skipNextLabelPropSave = false
   }
 
   setDefaultUrl() {
@@ -454,6 +455,7 @@ class StateManager {
         });
       }
     })
+    this.skipNextLabelPropSave = false
   }
 
   getNewBbox(maskSet) {
@@ -483,13 +485,24 @@ class StateManager {
       prevRgbImg: this.prevFeedState.rgbImg, 
       depth: this.curFeedState.depth, 
       prevDepth: this.prevFeedState.depth, 
-      prevObjects, 
+      objects: prevObjects, 
       basePose: this.curFeedState.pose,
       prevBasePose: this.prevFeedState.pose,
       frameCount: this.frameCount,
       categories: [null, ...this.categories], // Include null so category indices start at 1
     }
+    let saveProps = {
+      rgb: this.prevFeedState.rgbImg, 
+      objects: prevObjects, 
+      frameCount: this.frameCount,
+      categories: [null, ...this.categories], // Include null so category indices start at 1
+    }
     this.socket.emit("label_propagation", labelProps)
+    if (this.skipNextLabelPropSave) {
+      this.skipNextLabelPropSave = false
+    } else {
+      this.socket.emit("save_rgb_seg", saveProps)
+    }
     // Reset
     this.stateProcessed.rgbImg = true;
     this.stateProcessed.depth = true;
@@ -537,11 +550,26 @@ class StateManager {
   }
 
   saveAnnotations() {
+    console.log("saving annotations, categories, and properties")
+    let curObjects = this.curFeedState.objects.filter(o => o.type === "annotate")
+    // Update categories and properties
+    for (let i in curObjects) {
+      this.categories.add(curObjects[i].label)
+      let props = curObjects[i].properties.split("\n ")
+      props.forEach(p => this.properties.add(p))
+    }
     let categories = [null, ...this.categories] // Include null so category indices start at 1
     let properties = [...this.properties]
-    this.socket.emit("save_annotations", categories)
-    console.log("saving annotations, categories, and properties")
+    let saveProps = {
+      rgb: this.curFeedState.rgbImg, 
+      objects: curObjects, 
+      frameCount: this.frameCount,
+      categories, 
+    }
+    this.socket.emit("save_rgb_seg", saveProps)
     this.socket.emit("save_categories_properties", categories, properties)
+    this.socket.emit("save_annotations", categories)
+    this.skipNextLabelPropSave = true
   }
 
   retrainDetector() {

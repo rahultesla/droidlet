@@ -148,6 +148,7 @@ class LocobotAgent(LocoMCAgent):
         @sio.on("label_propagation")
         def label_propagation(sid, postData): 
                         
+            print("\n\n\nlabel prop start")
             # Decode rgb map
             rgb_bytes = base64.b64decode(postData["prevRgbImg"])
             rgb_np = np.frombuffer(rgb_bytes, dtype=np.uint8)
@@ -170,19 +171,14 @@ class LocobotAgent(LocoMCAgent):
             cur_depth = np.array(depth_imgs[1])
 
             # Convert mask points to mask maps then combine them
-            categories = postData["categories"]
             src_label = np.zeros((height, width)).astype(int)
-            # For display only -- 2 separate chair masks will be same color here
-            display_map = np.zeros((height, width)).astype(int) 
-            for n, o in enumerate(postData["prevObjects"]): 
+            for n, o in enumerate(postData["objects"]): 
                 poly = Polygons(o["mask"])
                 bitmap = poly.mask(height, width)
-                index = categories.index(o["label"])
                 for i in range(height): 
                     for j in range(width): 
                         if bitmap[i][j]: 
                             src_label[i][j] = n + 1
-                            display_map[i][j] = index
 
             # Attach base pose data
             pose = postData["prevBasePose"]
@@ -199,11 +195,39 @@ class LocobotAgent(LocoMCAgent):
                 i = int(i_float)
                 if i == 0: 
                     continue
-                objects[i-1] = postData["prevObjects"][i-1] # Do this in the for loop cause some objects aren't returned
+                objects[i-1] = postData["objects"][i-1] # Do this in the for loop cause some objects aren't returned
                 mask_points_nd = Mask(np.where(res_labels == i, 1, 0)).polygons().points
                 mask_points = list(map(lambda x: x.tolist(), mask_points_nd))
                 objects[i-1]["mask"] = mask_points
                 objects[i-1]["type"] = "annotate"
+
+            print("\n\n\nlabel prop end")
+            # Returns an array of objects with updated masks
+            sio.emit("labelPropagationReturn", objects)
+
+        @sio.on("save_rgb_seg")
+        def save_rgb_seg(sid, postData): 
+                        
+            print("\n\n\nsave rgb seg start")
+            # Decode rgb map
+            rgb_bytes = base64.b64decode(postData["rgb"])
+            rgb_np = np.frombuffer(rgb_bytes, dtype=np.uint8)
+            rgb_bgr = cv2.imdecode(rgb_np, cv2.IMREAD_COLOR)
+            rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
+            src_img = np.array(rgb)
+            height, width, _ = src_img.shape
+
+            # Convert mask points to mask maps then combine them
+            categories = postData["categories"]
+            display_map = np.zeros((height, width)).astype(int) # 2 separate chair masks will be same color here
+            for o in postData["objects"]: 
+                poly = Polygons(o["mask"])
+                bitmap = poly.mask(height, width)
+                index = categories.index(o["label"])
+                for i in range(height): 
+                    for j in range(width): 
+                        if bitmap[i][j]: 
+                            display_map[i][j] = index
 
             # Save annotation data to disk for retraining
             Path("annotation_data/seg").mkdir(parents=True, exist_ok=True)
@@ -212,12 +236,12 @@ class LocobotAgent(LocoMCAgent):
             im = Image.fromarray(src_img)
             im.save("annotation_data/rgb/{:05d}.jpg".format(postData["frameCount"]))
 
-            # Returns an array of objects with updated masks
-            sio.emit("labelPropagationReturn", objects)
+            print("\n\n\nsave rgb seg done")
 
         # Adapted from coco_creator.ipynb
         @sio.on("save_annotations")
         def save_annotations(sid, categories): 
+            print("\n\n\nsave annotation start")
             seg_dir = "annotation_data/seg/"
             img_dir = "annotation_data/rgb/"
             coco_file_name = "annotation_data/coco/coco_results.json"
@@ -287,6 +311,7 @@ class LocobotAgent(LocoMCAgent):
             with open(coco_file_name, "w") as output_json:
                 json.dump(coco_output, output_json)
                 print("Saved annotations to", coco_file_name)
+            print("\n\n\nsave annotation end")
 
         @sio.on("save_categories_properties")
         def save_categories_properties(sid, categories, properties): 
