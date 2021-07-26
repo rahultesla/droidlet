@@ -16,6 +16,7 @@ import TimelineDetails from "./components/Timeline/TimelineDetails";
 import TimelineResults from "./components/Timeline/TimelineResults";
 import MobileMainPane from "./MobileMainPane";
 import Retrainer from "./components/Retrainer";
+import OfflinePanel from "./components/OfflinePanel";
 
 /**
  * The main state manager for the dashboard.
@@ -598,6 +599,10 @@ class StateManager {
         })
       }
     });
+  }
+
+  goOffline(filepath) {
+    console.log("Going offline with filepath", filepath)
   }
 
   processMemoryState(msg) {
