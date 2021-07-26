@@ -94,6 +94,7 @@ class StateManager {
     this.onSave = this.onSave.bind(this);
     this.saveAnnotations = this.saveAnnotations.bind(this);
     this.annotationRetrain = this.annotationRetrain.bind(this);
+    this.goOffline = this.goOffline.bind(this);
 
     // set turk related params
     const urlParams = new URLSearchParams(window.location.search);
@@ -105,7 +106,7 @@ class StateManager {
     this.setTurkWorkerId(turkWorkerId);
 
     // set default url to actual ip:port
-    this.default_url = window.location.host;
+    // this.default_url = window.location.host;
     this.setUrl(this.default_url);
 
     let url = localStorage.getItem("server_url");
@@ -603,6 +604,7 @@ class StateManager {
 
   goOffline(filepath) {
     console.log("Going offline with filepath", filepath)
+    this.socket.emit("start_offline_dashboard", filepath);
   }
 
   processMemoryState(msg) {
