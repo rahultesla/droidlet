@@ -364,7 +364,7 @@ class OfflineInstance():
             encode_param = [int(cv2.IMWRITE_WEBP_QUALITY), quality]
             fmt = ".webp"
 
-            _, rgb_data = cv2.imencode(fmt, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), encode_param)
+            _, rgb_data = cv2.imencode(fmt, rgb, encode_param)
             _, depth_img_data = cv2.imencode(fmt, depth_img, encode_param)
 
             sio.emit("rgb", base64.b64encode(rgb_data).decode("utf-8"))
