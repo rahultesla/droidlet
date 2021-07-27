@@ -36,29 +36,25 @@ class OfflineInstance():
         self.init_event_handlers()
     
     def init_event_handlers(self): 
-        @sio.on("label_propagation")
-        def label_propagation(sid, postData): 
+        @sio.on("offline_label_propagation")
+        def offline_label_propagation(sid, postData): 
                         
-            # Decode rgb map
-            rgb_bytes = base64.b64decode(postData["prevRgbImg"])
-            rgb_np = np.frombuffer(rgb_bytes, dtype=np.uint8)
-            rgb_bgr = cv2.imdecode(rgb_np, cv2.IMREAD_COLOR)
-            rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
-            src_img = np.array(rgb)
+            # Get rgb image and depth map
+            rgb_path = os.path.join(postData["filepath"], "rgb")
+            depth_path = os.path.join(postData["filepath"], "depth")
+            num_zeros = 5 - len(str(postData["frameId"]))
+            file_num = "".join(["0" for _ in range(num_zeros)]) + str(postData["frameId"])
+            prev_num_zeros = 5 - len(str(postData["frameId"] - 1))
+            prev_file_num = "".join(["0" for _ in range(prev_num_zeros)]) + str(postData["frameId"] - 1)
+            
+            rgb_filename = os.path.join(rgb_path, file_num + ".jpg")
+            src_img = cv2.imread(rgb_filename)
             height, width, _ = src_img.shape
 
-            # Convert depth map to meters
-            depth_imgs = []
-            for i, depth in enumerate([postData["prevDepth"], postData["depth"]]): 
-                depth_encoded = depth["depthImg"]
-                depth_bytes = base64.b64decode(depth_encoded)
-                depth_np = np.frombuffer(depth_bytes, dtype=np.uint8)
-                depth_decoded = cv2.imdecode(depth_np, cv2.IMREAD_COLOR)
-                depth_unscaled = (255 - np.copy(depth_decoded[:,:,0]))
-                depth_scaled = depth_unscaled / 255 * (float(depth["depthMax"]) - float(depth["depthMin"]))
-                depth_imgs.append(depth_scaled)
-            src_depth = np.array(depth_imgs[0])
-            cur_depth = np.array(depth_imgs[1])
+            depth_filename = os.path.join(depth_path, file_num + ".npy")
+            cur_depth = np.load(depth_filename)
+            prev_depth_filename = os.path.join(depth_path, prev_file_num + ".npy")
+            src_depth = np.load(prev_depth_filename)
 
             # Convert mask points to mask maps then combine them
             src_label = np.zeros((height, width)).astype(int)
@@ -71,13 +67,15 @@ class OfflineInstance():
                             src_label[i][j] = n + 1
 
             # Attach base pose data
-            pose = postData["prevBasePose"]
-            src_pose = np.array([pose["x"], pose["y"], pose["yaw"]])
-            pose = postData["basePose"]
-            cur_pose = np.array([pose["x"], pose["y"], pose["yaw"]])
+            pose_filepath = os.path.join(postData["filepath"], "data.json")
+            with open(pose_filepath, "rt") as file: 
+                pose_dict = json.load(file)
+            src_pose = pose_dict[str(postData["frameId"] - 1)]
+            cur_pose = pose_dict[str(postData["frameId"])]
             
             LP = LabelPropagate()
             res_labels = LP(src_img, src_depth, src_label, src_pose, cur_pose, cur_depth)
+            print("label prop output shape:", res_labels.shape)
 
             # Convert mask maps to mask points
             objects = {}
@@ -97,7 +95,7 @@ class OfflineInstance():
         @sio.on("offline_save_rgb_seg")
         def offline_save_rgb_seg(sid, postData): 
 
-            # Decode rgb map
+            # Get rgb image
             rgb_path = os.path.join(postData["filepath"], "rgb")
             num_zeros = 5 - len(str(postData["frameId"]))
             file_num = "".join(["0" for _ in range(num_zeros)]) + str(postData["frameId"])
@@ -120,13 +118,16 @@ class OfflineInstance():
             # Save annotation data to disk for retraining
             Path("annotation_data/seg").mkdir(parents=True, exist_ok=True)
             Path("annotation_data/rgb").mkdir(parents=True, exist_ok=True)
-            np.save("annotation_data/seg/{:05d}.npy".format(postData["frameId"]), display_map)
+            np.save("annotation_data/seg/{:05d}.npy".format(postData["outputId"]), display_map)
             im = Image.fromarray(rgb)
-            im.save("annotation_data/rgb/{:05d}.jpg".format(postData["frameId"]))
+            im.save("annotation_data/rgb/{:05d}.jpg".format(postData["outputId"]))
+
+            if postData["finalFrame"]: 
+                save_annotations(postData["categories"])
 
         # Adapted from coco_creator.ipynb
-        @sio.on("save_annotations")
-        def save_annotations(sid, categories): 
+        # Use in offline_save_rgb_seg socket event
+        def save_annotations(categories): 
             seg_dir = "annotation_data/seg/"
             img_dir = "annotation_data/rgb/"
             coco_file_name = "annotation_data/coco/coco_results.json"

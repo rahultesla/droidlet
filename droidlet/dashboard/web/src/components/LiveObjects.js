@@ -35,6 +35,7 @@ class LiveObjects extends React.Component {
     this.onAnnotationSave = this.onAnnotationSave.bind(this);
     this.onRetrain = this.onRetrain.bind(this);
     this.onModelSwitch = this.onModelSwitch.bind(this);
+    this.onLabelProp = this.onLabelProp.bind(this);
     this.onPrevFrame = this.onPrevFrame.bind(this);
     this.onNextFrame = this.onNextFrame.bind(this);
 
@@ -133,6 +134,12 @@ class LiveObjects extends React.Component {
     if (this.props.stateManager) {
       console.log("switching model...")
       this.props.stateManager.socket.emit("switch_detector")
+    }
+  }
+
+  onLabelProp() {
+    if (this.props.stateManager) {
+      this.props.stateManager.offlineLabelProp()
     }
   }
 
@@ -259,6 +266,7 @@ class LiveObjects extends React.Component {
     let offlineButtons = null
     if (this.state.offline) {
       offlineButtons = <span style={{ float: "right" }}>
+        <button onClick={this.onLabelProp}>{"LP"}</button>
         <button onClick={this.onPrevFrame}>{"<-"}</button>
         <button onClick={this.onNextFrame}>{"->"}</button>
       </span>

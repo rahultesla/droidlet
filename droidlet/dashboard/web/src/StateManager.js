@@ -586,19 +586,21 @@ class StateManager {
       this.socket.emit("save_categories_properties", categories, properties)
       
       // Save rgb/seg
+      let outputId = 0
       for (let key in this.offlineObjects) {
         let objects = this.offlineObjects[key]
+        let finalFrame = outputId === Object.keys(this.offlineObjects).length - 1
         let saveProps = {
           filepath: this.filepath,
           frameId: parseInt(key),
+          outputId,
           objects, 
           categories, 
+          finalFrame, // When true, backend will save all annotations to COCO format
         }
         this.socket.emit("offline_save_rgb_seg", saveProps)
+        outputId++
       }
-      
-      // Save annotations to COCO format
-      this.socket.emit("save_annotations", categories)
 
     } else {
       // Save current rgb/seg if needed
@@ -669,6 +671,26 @@ class StateManager {
   handleMaxFrames(maxFrames) {
     this.maxOfflineFrames = maxFrames
     console.log("max frames:", maxFrames)
+  }
+
+  offlineLabelProp() {
+    console.log(Object.keys(this.offlineObjects))
+    if (this.frameId === 0 || Object.keys(this.offlineObjects).indexOf(String(this.frameId - 1)) === -1) {
+      console.log("No previous frames to use in label propagation")
+      return
+    }
+
+    // Get previous frame's objects
+    let prevFrame = this.frameId - 1
+    let prevObjects = this.offlineObjects[prevFrame]
+    let props = {
+      filepath: this.filepath,
+      frameId: this.frameId,
+      objects: prevObjects,
+    }
+
+    // Send objs and id to backend
+    this.socket.emit("offline_label_propagation", props)
   }
 
   previousFrame() {
