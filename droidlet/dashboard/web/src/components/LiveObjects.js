@@ -35,6 +35,8 @@ class LiveObjects extends React.Component {
     this.onAnnotationSave = this.onAnnotationSave.bind(this);
     this.onRetrain = this.onRetrain.bind(this);
     this.onModelSwitch = this.onModelSwitch.bind(this);
+    this.onPrevFrame = this.onPrevFrame.bind(this);
+    this.onNextFrame = this.onNextFrame.bind(this);
 
     this.initialState = {
       height: props.height,
@@ -42,6 +44,7 @@ class LiveObjects extends React.Component {
       rgb: null,
       objects: null,
       modelMetrics: null,
+      offline: false,
     };
     this.state = this.initialState;
   }
@@ -122,6 +125,18 @@ class LiveObjects extends React.Component {
     if (this.props.stateManager) {
       console.log("switching model...")
       this.props.stateManager.socket.emit("switch_detector")
+    }
+  }
+
+  onPrevFrame() {
+    if (this.props.stateManager) {
+      this.props.stateManager.previousFrame()
+    }
+  }
+
+  onNextFrame() {
+    if (this.props.stateManager) {
+      this.props.stateManager.nextFrame()
     }
   }
 
@@ -233,6 +248,14 @@ class LiveObjects extends React.Component {
       )
     }
 
+    let offlineButtons = null
+    if (this.state.offline) {
+      offlineButtons = <span style={{ float: "right" }}>
+        <button onClick={this.onPrevFrame}>{"<-"}</button>
+        <button onClick={this.onNextFrame}>{"->"}</button>
+      </span>
+    }
+
     return (
       <Rnd
         default={{
@@ -253,6 +276,7 @@ class LiveObjects extends React.Component {
         <button onClick={this.onFixup}>Fix</button>
         <button onClick={this.onAnnotationSave}>Save</button>
         <button onClick={this.onRetrain}>Retrain</button>
+        {offlineButtons}
         {updatedModelDiv}
       </Rnd>
     );

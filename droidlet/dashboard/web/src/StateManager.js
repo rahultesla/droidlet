@@ -16,7 +16,6 @@ import TimelineDetails from "./components/Timeline/TimelineDetails";
 import TimelineResults from "./components/Timeline/TimelineResults";
 import MobileMainPane from "./MobileMainPane";
 import Retrainer from "./components/Retrainer";
-import OfflinePanel from "./components/OfflinePanel";
 
 /**
  * The main state manager for the dashboard.
@@ -95,6 +94,7 @@ class StateManager {
     this.saveAnnotations = this.saveAnnotations.bind(this);
     this.annotationRetrain = this.annotationRetrain.bind(this);
     this.goOffline = this.goOffline.bind(this);
+    this.handleMaxFrames = this.handleMaxFrames.bind(this);
 
     // set turk related params
     const urlParams = new URLSearchParams(window.location.search);
@@ -141,6 +141,7 @@ class StateManager {
     this.categories = new Set()
     this.properties = new Set()
     this.annotationsSaved = true
+    this.offline = false
   }
 
   setDefaultUrl() {
@@ -247,6 +248,7 @@ class StateManager {
     socket.on("labelPropagationReturn", this.labelPropagationReturn);
     socket.on("annotationRetrain", this.annotationRetrain);
     socket.on("saveRgbSegCallback", this.saveAnnotations);
+    socket.on("handleMaxFrames", this.handleMaxFrames);
   }
 
   updateStateManagerMemory(data) {
@@ -604,7 +606,55 @@ class StateManager {
 
   goOffline(filepath) {
     console.log("Going offline with filepath", filepath)
-    this.socket.emit("start_offline_dashboard", filepath);
+    this.filepath = filepath
+    this.frame_id = 0
+    this.offline = true
+
+    this.socket.emit("get_offline_frame", {
+      filepath: this.filepath, 
+      frame_id: this.frame_id,
+    })
+    this.socket.emit("start_offline_dashboard", filepath)
+    this.refs.forEach((ref) => {
+      if (ref instanceof LiveObjects) {
+        ref.setState({
+          objects: null,
+          modelMetrics: null,
+          offline: true,
+        })
+      }
+    })
+  }
+
+  handleMaxFrames(maxFrames) {
+    this.maxOfflineFrames = maxFrames
+    console.log("max frames:", maxFrames)
+  }
+
+  previousFrame() {
+    if (this.frame_id === 0) {
+      console.log("no frames under 0")
+      return
+    }
+    this.frame_id--
+    console.log("Prev frame", this.frame_id)
+    this.socket.emit("get_offline_frame", {
+      filepath: this.filepath, 
+      frame_id: this.frame_id
+    })
+  }
+
+  nextFrame() {
+    if (this.frame_id === this.maxOfflineFrames) {
+      console.log("no frames over", this.maxOfflineFrames)
+      return
+    }
+    this.frame_id++
+    console.log("Next frame", this.frame_id)
+    this.socket.emit("get_offline_frame", {
+      filepath: this.filepath, 
+      frame_id: this.frame_id
+    })
   }
 
   processMemoryState(msg) {

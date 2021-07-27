@@ -456,13 +456,21 @@ class LocobotAgent(LocoMCAgent):
         # Send first frame in folder
         @sio.on("start_offline_dashboard")
         def start_offline_dashboard(sid, filepath): 
+            num_files = len(os.listdir(os.path.join(filepath, "rgb")))
+            sio.emit("handleMaxFrames", num_files - 1) # Minus 1 because filenames start at 00000
+
+        # Send first frame in folder
+        @sio.on("get_offline_frame")
+        def get_offline_frame(sid, data): 
             print("\n\n\n\n\nin offline dashboard backend")
-            rgb_path = os.path.join(filepath, "rgb")
-            rgb_filename = os.path.join(rgb_path, "00000.jpg")
-            depth_path = os.path.join(filepath, "depth")
-            depth_filename = os.path.join(depth_path, "00000.npy")
+            rgb_path = os.path.join(data["filepath"], "rgb")
+            depth_path = os.path.join(data["filepath"], "depth")
+
+            num_zeros = 5 - len(str(data["frame_id"]))
+            file_num = "".join(["0" for _ in range(num_zeros)]) + str(data["frame_id"])
+            rgb_filename = os.path.join(rgb_path, file_num + ".jpg")
+            depth_filename = os.path.join(depth_path, file_num + ".npy")
             
-            print(rgb_filename)
             rgb = cv2.imread(rgb_filename)
             depth = np.load(depth_filename)
 
@@ -476,8 +484,6 @@ class LocobotAgent(LocoMCAgent):
 
             _, rgb_data = cv2.imencode(fmt, cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), encode_param)
             _, depth_img_data = cv2.imencode(fmt, depth_img, encode_param)
-            print(rgb_data)
-            print(depth_img_data)
 
             sio.emit("rgb", base64.b64encode(rgb_data).decode("utf-8"))
             sio.emit("depth", {
@@ -485,8 +491,6 @@ class LocobotAgent(LocoMCAgent):
                 "depthMax": str(np.max(depth)),
                 "depthMin": str(np.min(depth)),
             })
-            print(rgb_data.shape)
-            print(depth_img_data.shape)
 
 
     def init_memory(self):
