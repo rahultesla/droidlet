@@ -94,16 +94,16 @@ class OfflineInstance():
             # Returns an array of objects with updated masks
             sio.emit("labelPropagationReturn", objects)
         
-        @sio.on("save_rgb_seg")
-        def save_rgb_seg(sid, postData): 
+        @sio.on("offline_save_rgb_seg")
+        def offline_save_rgb_seg(sid, postData): 
 
             # Decode rgb map
-            rgb_bytes = base64.b64decode(postData["rgb"])
-            rgb_np = np.frombuffer(rgb_bytes, dtype=np.uint8)
-            rgb_bgr = cv2.imdecode(rgb_np, cv2.IMREAD_COLOR)
-            rgb = cv2.cvtColor(rgb_bgr, cv2.COLOR_BGR2RGB)
-            src_img = np.array(rgb)
-            height, width, _ = src_img.shape
+            rgb_path = os.path.join(postData["filepath"], "rgb")
+            num_zeros = 5 - len(str(postData["frameId"]))
+            file_num = "".join(["0" for _ in range(num_zeros)]) + str(postData["frameId"])
+            rgb_filename = os.path.join(rgb_path, file_num + ".jpg")
+            rgb = cv2.imread(rgb_filename)
+            height, width, _ = rgb.shape
 
             # Convert mask points to mask maps then combine them
             categories = postData["categories"]
@@ -120,12 +120,9 @@ class OfflineInstance():
             # Save annotation data to disk for retraining
             Path("annotation_data/seg").mkdir(parents=True, exist_ok=True)
             Path("annotation_data/rgb").mkdir(parents=True, exist_ok=True)
-            np.save("annotation_data/seg/{:05d}.npy".format(postData["frameCount"]), display_map)
-            im = Image.fromarray(src_img)
-            im.save("annotation_data/rgb/{:05d}.jpg".format(postData["frameCount"]))
-
-            if postData["callback"]: 
-                sio.emit("saveRgbSegCallback")
+            np.save("annotation_data/seg/{:05d}.npy".format(postData["frameId"]), display_map)
+            im = Image.fromarray(rgb)
+            im.save("annotation_data/rgb/{:05d}.jpg".format(postData["frameId"]))
 
         # Adapted from coco_creator.ipynb
         @sio.on("save_annotations")
@@ -162,8 +159,8 @@ class OfflineInstance():
                 image_id = int(x.split(".")[0])
                 # load the annotation file
                 try:
-                    prop_path = os.path.join(seg_dir, "{:05d}.npy".format(image_id))
-                    annot = np.load(prop_path).astype(np.uint8)
+                    seg_path = os.path.join(seg_dir, "{:05d}.npy".format(image_id))
+                    annot = np.load(seg_path, allow_pickle=True).astype(np.uint8)
                 except Exception as e:
                     print(e)
                     continue
@@ -347,7 +344,6 @@ class OfflineInstance():
         # Send first frame in folder
         @sio.on("get_offline_frame")
         def get_offline_frame(sid, data): 
-            print("\n\n\n\n\nin offline dashboard backend")
             rgb_path = os.path.join(data["filepath"], "rgb")
             depth_path = os.path.join(data["filepath"], "depth")
 

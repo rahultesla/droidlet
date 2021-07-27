@@ -570,25 +570,58 @@ class StateManager {
   onSave() {
     console.log("saving annotations, categories, and properties")
     
-    // Save rgb/seg if needed
-    if (!this.annotationsSaved) {
-      let curObjects = this.curFeedState.objects.filter(o => o.type === "annotate")
-      for (let i in curObjects) {
-        this.categories.add(curObjects[i].label)
-        let props = curObjects[i].properties.split("\n ")
-        props.forEach(p => this.properties.add(p))
+    if (this.offline) {
+      // Save categories and properties
+      for (let key in this.offlineObjects) {
+        let objects = this.offlineObjects[key]
+        for (let i in objects) {
+          let obj = objects[i]
+          this.categories.add(obj.label)
+          let properties = obj.properties.split("\n ")
+          properties.forEach(p => this.properties.add(p))
+        }
       }
-      let saveProps = {
-        rgb: this.curFeedState.rgbImg, 
-        objects: curObjects, 
-        frameCount: this.frameCount,
-        categories: [null, ...this.categories], // Include null so category indices start at 1
-        callback: true, // Include boolean param to save annotations after -- ensures whatever the noun form of synchronous is
+      let categories = [null, ...this.categories] // Include null so category indices start at 1
+      let properties = [...this.properties]
+      this.socket.emit("save_categories_properties", categories, properties)
+      
+      // Save rgb/seg
+      for (let key in this.offlineObjects) {
+        let objects = this.offlineObjects[key]
+        let saveProps = {
+          filepath: this.filepath,
+          frameId: parseInt(key),
+          objects, 
+          categories, 
+        }
+        this.socket.emit("offline_save_rgb_seg", saveProps)
       }
-      this.socket.emit("save_rgb_seg", saveProps)
-      this.annotationsSaved = true
+      
+      // Save annotations to COCO format
+      this.socket.emit("save_annotations", categories)
+
     } else {
-      this.saveAnnotations()
+      // Save current rgb/seg if needed
+      if (!this.annotationsSaved) {
+        let curObjects = this.curFeedState.objects.filter(o => o.type === "annotate")
+        for (let i in curObjects) {
+          this.categories.add(curObjects[i].label)
+          let props = curObjects[i].properties.split("\n ")
+          props.forEach(p => this.properties.add(p))
+        }
+        let saveProps = {
+          rgb: this.curFeedState.rgbImg, 
+          objects: curObjects, 
+          frameCount: this.frameCount,
+          categories: [null, ...this.categories], // Include null so category indices start at 1
+          callback: true, // Include boolean param to save annotations after -- ensures whatever the noun form of synchronous is
+        }
+        // This emit has a callback that calls saveAnnotations() 
+        this.socket.emit("save_rgb_seg", saveProps)
+        this.annotationsSaved = true
+      } else {
+        this.saveAnnotations()
+      }
     }
   }
 
