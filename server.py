@@ -42,19 +42,19 @@ class OfflineInstance():
             # Get rgb image and depth map
             rgb_path = os.path.join(postData["filepath"], "rgb")
             depth_path = os.path.join(postData["filepath"], "depth")
-            num_zeros = 5 - len(str(postData["frameId"]))
-            file_num = "".join(["0" for _ in range(num_zeros)]) + str(postData["frameId"])
-            prev_num_zeros = 5 - len(str(postData["frameId"] - 1))
-            prev_file_num = "".join(["0" for _ in range(prev_num_zeros)]) + str(postData["frameId"] - 1)
+            cur_num_zeros = 5 - len(str(postData["curFrame"]))
+            cur_file_num = "".join(["0" for _ in range(cur_num_zeros)]) + str(postData["curFrame"])
+            src_num_zeros = 5 - len(str(postData["srcFrame"]))
+            src_file_num = "".join(["0" for _ in range(src_num_zeros)]) + str(postData["srcFrame"])
             
-            rgb_filename = os.path.join(rgb_path, file_num + ".jpg")
+            rgb_filename = os.path.join(rgb_path, cur_file_num + ".jpg")
             src_img = cv2.imread(rgb_filename)
             height, width, _ = src_img.shape
 
-            depth_filename = os.path.join(depth_path, file_num + ".npy")
+            depth_filename = os.path.join(depth_path, cur_file_num + ".npy")
             cur_depth = np.load(depth_filename)
-            prev_depth_filename = os.path.join(depth_path, prev_file_num + ".npy")
-            src_depth = np.load(prev_depth_filename)
+            src_depth_filename = os.path.join(depth_path, src_file_num + ".npy")
+            src_depth = np.load(src_depth_filename)
 
             # Convert mask points to mask maps then combine them
             src_label = np.zeros((height, width)).astype(int)
@@ -70,8 +70,8 @@ class OfflineInstance():
             pose_filepath = os.path.join(postData["filepath"], "data.json")
             with open(pose_filepath, "rt") as file: 
                 pose_dict = json.load(file)
-            src_pose = pose_dict[str(postData["frameId"] - 1)]
-            cur_pose = pose_dict[str(postData["frameId"])]
+            src_pose = pose_dict[str(postData["srcFrame"])]
+            cur_pose = pose_dict[str(postData["curFrame"])]
             
             LP = LabelPropagate()
             res_labels = LP(src_img, src_depth, src_label, src_pose, cur_pose, cur_depth)

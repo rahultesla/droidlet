@@ -545,6 +545,9 @@ class StateManager {
         }
       }
     })
+    if (this.offline) {
+      this.offlineObjects[this.frameId] = this.curFeedState.objects
+    }
     if (Object.keys(res).length > 0) {
       this.annotationsSaved = false
     }
@@ -673,20 +676,14 @@ class StateManager {
     console.log("max frames:", maxFrames)
   }
 
-  offlineLabelProp() {
-    console.log(Object.keys(this.offlineObjects))
-    if (this.frameId === 0 || Object.keys(this.offlineObjects).indexOf(String(this.frameId - 1)) === -1) {
-      console.log("No previous frames to use in label propagation")
-      return
-    }
-
-    // Get previous frame's objects
-    let prevFrame = this.frameId - 1
-    let prevObjects = this.offlineObjects[prevFrame]
+  offlineLabelProp(srcFrame, curFrame) {
+    // Get src frame's objects
+    let srcObjects = this.offlineObjects[srcFrame]
     let props = {
       filepath: this.filepath,
-      frameId: this.frameId,
-      objects: prevObjects,
+      srcFrame,
+      curFrame, 
+      objects: srcObjects,
     }
 
     // Send objs and id to backend
@@ -704,6 +701,7 @@ class StateManager {
       filepath: this.filepath, 
       frameId: this.frameId
     })
+    // Get objects
     this.curFeedState.objects = this.offlineObjects[this.frameId] || []
     this.refs.forEach((ref) => {
       if (ref instanceof LiveObjects) {
@@ -712,6 +710,12 @@ class StateManager {
         });
       }
     })
+
+    // Run label prop
+    let curFrameHasObjects = this.offlineObjects[this.frameId] && this.offlineObjects[this.frameId].length > 0
+    if (this.offlineObjects[this.frameId + 1] && !curFrameHasObjects) {
+      this.offlineLabelProp(this.frameId + 1, this.frameId)
+    }
   }
 
   nextFrame() {
@@ -733,6 +737,12 @@ class StateManager {
         });
       }
     })
+
+    // Run label prop
+    let curFrameHasObjects = this.offlineObjects[this.frameId] && this.offlineObjects[this.frameId].length > 0
+    if (this.offlineObjects[this.frameId - 1] && !curFrameHasObjects) {
+      this.offlineLabelProp(this.frameId - 1, this.frameId)
+    }
   }
 
   processMemoryState(msg) {
