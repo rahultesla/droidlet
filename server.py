@@ -351,8 +351,8 @@ class OfflineInstance():
             rgb_path = os.path.join(data["filepath"], "rgb")
             depth_path = os.path.join(data["filepath"], "depth")
 
-            num_zeros = 5 - len(str(data["frame_id"]))
-            file_num = "".join(["0" for _ in range(num_zeros)]) + str(data["frame_id"])
+            num_zeros = 5 - len(str(data["frameId"]))
+            file_num = "".join(["0" for _ in range(num_zeros)]) + str(data["frameId"])
             rgb_filename = os.path.join(rgb_path, file_num + ".jpg")
             depth_filename = os.path.join(depth_path, file_num + ".npy")
             

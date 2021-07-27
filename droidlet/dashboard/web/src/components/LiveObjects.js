@@ -45,8 +45,16 @@ class LiveObjects extends React.Component {
       objects: null,
       modelMetrics: null,
       offline: false,
+      updateFixup: false,
     };
     this.state = this.initialState;
+  }
+
+  componentDidUpdate() {
+    if (this.state.updateFixup) {
+      this.onFixup()
+      this.setState({ updateFixup: false })
+    }
   }
 
   addObject(object) {

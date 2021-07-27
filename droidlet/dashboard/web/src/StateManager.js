@@ -121,14 +121,14 @@ class StateManager {
     this.curFeedState = {
       rgbImg: null, 
       depth: null, 
-      objects: null, // Can be changed by annotation tool
-      origObjects: null, // Original objects sent from backend
+      objects: [], // Can be changed by annotation tool
+      origObjects: [], // Original objects sent from backend
       pose: null,
     }
     this.prevFeedState = {
       rgbImg: null, 
       depth: null, 
-      objects: null,
+      objects: [],
       pose: null,
     }
     this.stateProcessed = {
@@ -137,11 +137,13 @@ class StateManager {
       objects: false,
       pose: false,
     }
-    this.frameCount = 0
+    this.frameCount = 0 // For filenames when saving
     this.categories = new Set()
     this.properties = new Set()
     this.annotationsSaved = true
     this.offline = false
+    this.frameId = 0 // Offline frame count
+    this.offlineObjects = {} // Maps frame ids to masks
   }
 
   setDefaultUrl() {
@@ -454,14 +456,18 @@ class StateManager {
     }
     this.curFeedState.objects = newObjects
     this.annotationsSaved = false
-
+    
     this.refs.forEach((ref) => {
       if (ref instanceof LiveObjects) {
         ref.setState({
           objects: this.curFeedState.objects,
+          updateFixup: true,
         });
       }
     })
+    if (this.offline) {
+      this.offlineObjects[this.frameId] = this.curFeedState.objects
+    }
   }
 
   getNewBbox(maskSet) {
@@ -532,6 +538,7 @@ class StateManager {
             }
             j++
           }
+
           res[i].bbox = this.getNewBbox(res[i].mask)
           ref.addObject(res[i])
           this.curFeedState.objects.push(res[i])
@@ -607,18 +614,18 @@ class StateManager {
   goOffline(filepath) {
     console.log("Going offline with filepath", filepath)
     this.filepath = filepath
-    this.frame_id = 0
+    this.frameId = 0
     this.offline = true
 
     this.socket.emit("get_offline_frame", {
       filepath: this.filepath, 
-      frame_id: this.frame_id,
+      frameId: this.frameId,
     })
     this.socket.emit("start_offline_dashboard", filepath)
     this.refs.forEach((ref) => {
       if (ref instanceof LiveObjects) {
         ref.setState({
-          objects: null,
+          objects: [],
           modelMetrics: null,
           offline: true,
         })
@@ -632,28 +639,44 @@ class StateManager {
   }
 
   previousFrame() {
-    if (this.frame_id === 0) {
+    if (this.frameId === 0) {
       console.log("no frames under 0")
       return
     }
-    this.frame_id--
-    console.log("Prev frame", this.frame_id)
+    this.frameId--
+    console.log("Prev frame", this.frameId)
     this.socket.emit("get_offline_frame", {
       filepath: this.filepath, 
-      frame_id: this.frame_id
+      frameId: this.frameId
+    })
+    this.curFeedState.objects = this.offlineObjects[this.frameId] || []
+    this.refs.forEach((ref) => {
+      if (ref instanceof LiveObjects) {
+        ref.setState({
+          objects: this.curFeedState.objects,
+        });
+      }
     })
   }
 
   nextFrame() {
-    if (this.frame_id === this.maxOfflineFrames) {
+    if (this.frameId === this.maxOfflineFrames) {
       console.log("no frames over", this.maxOfflineFrames)
       return
     }
-    this.frame_id++
-    console.log("Next frame", this.frame_id)
+    this.frameId++
+    console.log("Next frame", this.frameId)
     this.socket.emit("get_offline_frame", {
       filepath: this.filepath, 
-      frame_id: this.frame_id
+      frameId: this.frameId
+    })
+    this.curFeedState.objects = this.offlineObjects[this.frameId] || []
+    this.refs.forEach((ref) => {
+      if (ref instanceof LiveObjects) {
+        ref.setState({
+          objects: this.curFeedState.objects,
+        });
+      }
     })
   }
 
