@@ -679,6 +679,9 @@ class StateManager {
             });
           }
         }
+        if (this.offline && ref instanceof LiveObjects) {
+          ref.setState({ rgb });
+        }
       });
       // Update state
       this.prevFeedState.rgbImg = this.curFeedState.rgbImg
